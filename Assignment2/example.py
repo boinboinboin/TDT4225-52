@@ -48,6 +48,8 @@ class ExampleProgram:
         rows = self.cursor.fetchall()
         print(tabulate(rows, headers=self.cursor.column_names))
 
+        
+
 
 def main():
     program = None
@@ -57,17 +59,17 @@ def main():
         
         # Define the queries for creating tables
         # Person Query
-        person_table_query = """CREATE TABLE IF NOT EXISTS Person (
+        person_table_query =    """CREATE TABLE IF NOT EXISTS Person (
                                     id INT AUTO_INCREMENT NOT NULL PRIMARY KEY,
                                     name VARCHAR(30))"""
       
         # User Query
-        user_table_query = """CREATE TABLE IF NOT EXISTS User (
-                               id VARCHAR(255) NOT NULL PRIMARY KEY,
-                               has_labels BOOLEAN)"""
+        user_table_query =      """CREATE TABLE IF NOT EXISTS User (
+                                    id VARCHAR(255) NOT NULL PRIMARY KEY,
+                                    has_labels BOOLEAN)"""
 
         # Activity Query
-        activity_table_query = """CREATE TABLE IF NOT EXISTS Activity (
+        activity_table_query =  """CREATE TABLE IF NOT EXISTS Activity (
                                     id INT AUTO_INCREMENT PRIMARY KEY,
                                     user_id VARCHAR(255) NOT NULL,
                                     transportation_mode VARCHAR(255),
@@ -102,12 +104,13 @@ def main():
         program.show_tables()
 
         # Delete the tables we created
-        program.drop_table(table_name="Person")
-        program.drop_table(table_name="User")
-        program.drop_table(table_name="Activity")
+        # Important that we do it in this order so that we don't break any foreign key constraints
         program.drop_table(table_name="TrackPoint")
+        program.drop_table(table_name="Activity")
+        program.drop_table(table_name="User")
+        program.drop_table(table_name="Person")
 
-        # Yep
+        # Jada
         program.show_tables()
     except Exception as e:
         print("ERROR: Failed to use database:", e)
