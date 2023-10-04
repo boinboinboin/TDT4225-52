@@ -1,6 +1,7 @@
 from DbConnector import DbConnector
 from tabulate import tabulate
 from pathlib import Path
+from datetime import datetime
 import os
 
 class ExampleProgram:
@@ -48,6 +49,29 @@ class ExampleProgram:
         self.cursor.execute("SHOW TABLES")
         rows = self.cursor.fetchall()
         print(tabulate(rows, headers=self.cursor.column_names))
+        
+    def insert_into_activity(self, activities):
+        
+        for activity in activities:
+            user_id, transportation_mode, start_date_time, end_date_time = activity
+            query = (
+                "INSERT INTO Activity (user_id, transportation_mode, start_date_time, end_date_time)"
+                " VALUES (%s, %s, %s, %s)"
+            )
+            values = (user_id, transportation_mode, start_date_time, end_date_time)
+            self.cursor.execute(query, values)
+            
+        self.db_connection.commit()
+           
+
+    def insert_into_user(self, sorted_users):
+        for user in sorted_users:
+            
+            id, has_labels = user
+
+            query = "INSERT INTO User (id, has_labels) VALUES (%s, %s)"
+            self.cursor.execute(query, (id, has_labels))
+        self.db_connection.commit()
 
     def insert_data_into_sql(self):
 
@@ -67,19 +91,108 @@ class ExampleProgram:
             print(f"An error occurred: {str(e)}")
 
         # Now 'ids' list contains all the ids from the file
+        print("Here are ids")
         print(ids)
+        
         root_dir = os.getcwd()
-        for foldername, subfolders, filenames in os.walk(root_dir):
-            # print(f"\foldername: {foldername}")
-            # foldername = "dataset/dataset/Data\181\Trajectory"
+        users = []
+        activities = []
+        for foldername, _, filenames in os.walk(root_dir + "/dataset/dataset/Data"):
+          
+            # Check if the foldername ends with "Trajectory", if not, it is a user folder
             if not foldername.endswith("Trajectory"):
                 id = foldername[-3:]
-
+                
+                # TODO Come back to this shit - very not good
+                # code includes folder "data", shouldn't
+                if id == "ata":
+                    continue
+                
+                # Flag and append the user with has_labels if the id is in the id's list
                 if id in ids:
-                    print(id + " is_labeled")
+                    users.append((id, 1))
+
+                # Flag and append the user with has_labels if the id is not in the id's list
+                else:
+                    users.append((id, 0))
                     
+            for file in filenames:
+                # only handle plt files
+                if file.endswith("plt"):
+                    user_id = foldername[-14:-11]
+                    with open(foldername + '/' + file) as file:
+                        # Check if the plt file contains fewer or exactly 2500 lines
+                        if len(file.readlines()) <= 2500:
+                            for i, line in enumerate(file):
+                                # Retrieve datetime from the first valid line in the file, which is always the 6th
+                                if i == 6:
+                                    columns = line.strip().split(',')
+                                    start_date, start_time = columns[5], columns[6]
+                                    start_date_time = start_date + " " + start_time
+                                # Retrieve datetime from the last valid line in the file.
+                                columns_lastline = line.strip().split(',')
+                                end_date, end_time = columns_lastline[5], columns_lastline[6]
+                                end_date_time_str = end_date + " " + end_time
+                                end_date_time = datetime.strptime(end_date_time_str, '%Y-%m-%d %H:%M:%S')
+                                
+                                # Append the activity to the activities list
+                                activities.append((user_id, None, start_date_time, end_date_time))
+                  
+
+        # Sort the user data and then insert it into the database
+        sorted_users = sorted(users, key=lambda x: x[0])
+        self.insert_into_user(sorted_users)
+        
+        # Insert the activity data into the database
+        self.insert_into_activity(activities)
+        print("inserted activities starting:")
+        for foldername, _, filenames in os.walk(root_dir + "/dataset/dataset/Data"):
+            for file in filenames:
+                # only handle txt files
+                if file.endswith("txt"):
+                    user_id = foldername[-3:]
+                    labeled_activities = []
+                    with open(foldername + '/' + file) as file:
+                        for i, line in enumerate(file):
+                            if i == 0:
+                                continue
+                            line = line.strip().split('\t')
+                            start_date_time_str, end_date_time_str, transportation_mode = line[0], line[1], line[2]
+                            start_date_time = datetime.strptime(start_date_time_str, '%Y/%m/%d %H:%M:%S')
+                            end_date_time = datetime.strptime(end_date_time_str, '%Y/%m/%d %H:%M:%S')
+                            labeled_activities.append((user_id, transportation_mode, start_date_time, end_date_time))
+                    # with open(foldername + '/' + file) as file:
+                    #     counter = 1
+                    #     for line in file:
+                    #         if counter < 6:
+                    #             counter += 1
+                    #         else:
+                    #             line = line.split(',')
+                    #             # Line is now list of data values
+                    #             # Example data: 39.906631, 116.385564, 0, 492, 40097.5864583333, 2009-10-11, 14:04:30
+                    #             # Latitude in decimal degrees index 0
+                    #             # Longitude in decimal degrees index 1
+                    #             # Ignore index 2
+                    #             # Altitude in feet index 3 (-777 if not valid)
+                    #             # Date - number of days (with fractional part) since 12/30/1899 index 4
+                    #             # Date as a string index 5
+                    #             # Time as a string index 6
+                                
+                                
+                    #         pass
+            
+
+            
+            # Note: Ensure you handle potential exceptions, e.g., if the file is not found or the data is not in the expected format.
+
             # for filename in filenames:
             #     print(filename)
+        
+        # Insert all the users into the User table in in MySQL
+        #print(users)
+
+        # Sort the user list based in id's
+        
         
     
         # Example data: 39.906631, 116.385564, 0, 492, 40097.5864583333, 2009-10-11, 14:04:30
@@ -93,8 +206,6 @@ class ExampleProgram:
         
 
         # Some of the users has labels, found in labeled_ids.txt
-        
-        
         return
         
 
@@ -136,10 +247,18 @@ def main():
                                       FOREIGN KEY (activity_id) REFERENCES Activity(id))"""
         
         # Creating the tables
+        
+       
+        program.drop_table(table_name="TrackPoint")
+        program.drop_table(table_name="Activity")
+        program.drop_table(table_name="User")
+        program.drop_table(table_name="Person")
+
         program.create_table(person_table_query, "Person")
         program.create_table(user_table_query, "User")
         program.create_table(activity_table_query, "Activity")
         program.create_table(trackpoint_table_query, "TrackPoint")
+
 
         # Insert data to the Person table
         program.insert_data(table_name="Person")
@@ -152,13 +271,9 @@ def main():
 
         program.insert_data_into_sql()
         
-
         # Delete the tables we created
         # Important that we do it in this order so that we don't break any foreign key constraints
-        # program.drop_table(table_name="TrackPoint")
-        # program.drop_table(table_name="Activity")
-        # program.drop_table(table_name="User")
-        # program.drop_table(table_name="Person")
+        
 
         # Jada
         program.show_tables()
