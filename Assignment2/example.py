@@ -1,6 +1,7 @@
 from DbConnector import DbConnector
 from tabulate import tabulate
-
+from pathlib import Path
+import os
 
 class ExampleProgram:
 
@@ -48,8 +49,54 @@ class ExampleProgram:
         rows = self.cursor.fetchall()
         print(tabulate(rows, headers=self.cursor.column_names))
 
+    def insert_data_into_sql(self):
+
+        print("running")
+
+        # Read the ids from labeled_ids.txt and store ids in an array;
+        ids = []
+        try:
+            with open('dataset/dataset/labeled_ids.txt', 'r') as file:
+                # Iterate over each line in the file
+                for line in file:
+                    # Strip white space and add to ids list
+                    ids.append(line.strip())
+        except FileNotFoundError:
+            print("The file data.txt was not found.")
+        except Exception as e:
+            print(f"An error occurred: {str(e)}")
+
+        # Now 'ids' list contains all the ids from the file
+        print(ids)
+        root_dir = os.getcwd()
+        for foldername, subfolders, filenames in os.walk(root_dir):
+            # print(f"\foldername: {foldername}")
+            # foldername = "dataset/dataset/Data\181\Trajectory"
+            if not foldername.endswith("Trajectory"):
+                id = foldername[-3:]
+
+                if id in ids:
+                    print(id + " is_labeled")
+                    
+            # for filename in filenames:
+            #     print(filename)
+        
+    
+        # Example data: 39.906631, 116.385564, 0, 492, 40097.5864583333, 2009-10-11, 14:04:30
+        # Latitude in decimal degrees field 1
+        # Longitude in decimal degrees field 2
+        # Ignore field 3
+        # Altitude in feet field 4 (-777 if not valid)
+        # Date - number of days (with fractional part) since 12/30/1899 field 5
+        # Date as a string field 6
+        # Time as a string field 7
         
 
+        # Some of the users has labels, found in labeled_ids.txt
+        
+        
+        return
+        
 
 def main():
     program = None
@@ -103,12 +150,15 @@ def main():
         # Display the tables
         program.show_tables()
 
+        program.insert_data_into_sql()
+        
+
         # Delete the tables we created
         # Important that we do it in this order so that we don't break any foreign key constraints
-        program.drop_table(table_name="TrackPoint")
-        program.drop_table(table_name="Activity")
-        program.drop_table(table_name="User")
-        program.drop_table(table_name="Person")
+        # program.drop_table(table_name="TrackPoint")
+        # program.drop_table(table_name="Activity")
+        # program.drop_table(table_name="User")
+        # program.drop_table(table_name="Person")
 
         # Jada
         program.show_tables()
