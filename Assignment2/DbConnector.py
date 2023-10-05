@@ -29,11 +29,14 @@ class DbConnector:
         # Connect to the database
         try:
             self.db_connection = mysql.connect(host=HOST, database=DATABASE, user=USER, password=PASSWORD, port=3306)
+            self.db_connection.query('SET GLOBAL connect_timeout=28800')
+            self.db_connection.query('SET GLOBAL interactive_timeout=28800')
+            self.db_connection.query('SET GLOBAL wait_timeout=28800')
         except Exception as e:
             print("ERROR: Failed to connect to db:", e)
 
         # Get the db cursor
-        self.cursor = self.db_connection.cursor()
+        self.cursor = self.db_connection.cursor(buffered=True)
 
         print("Connected to:", self.db_connection.get_server_info())
         # get database information
