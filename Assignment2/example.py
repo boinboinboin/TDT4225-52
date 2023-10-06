@@ -29,7 +29,7 @@ class ExampleProgram:
         for name in names:
             # Take note that the name is wrapped in '' --> '%s' because it is a string,
             # while an int would be %s etc
-            query = "INSERT INTO %s (name) VALUES ('%s')"
+            query = "INSERT IGNORE INTO %s (name) VALUES ('%s')"
             self.cursor.execute(query % (table_name, name))
         self.db_connection.commit()
 
@@ -98,12 +98,12 @@ class ExampleProgram:
         
     def insert_trackpoints(self, trackpoints):
         query = (
-            "INSERT INTO TrackPoint (activity_id, lat, lon, altitude, date_days, date_time)"
+            "INSERT IGNORE INTO TrackPoint (activity_id, lat, lon, altitude, date_days, date_time)"
             " VALUES (%s, %s, %s, %s, %s, %s)"
         )
         # Split the trackpoints into chunks to avoid memory error, tried to change mysql settings 
         # to circumvent this but it didn't work.
-        n = 70000
+        n = 500000
         splicedTrackpoints = [trackpoints[i:i + n] for i in range(0, len(trackpoints), n)]
         size = len(splicedTrackpoints)
         print("spliced trackpoints into " + str(size) + " chunks")
@@ -159,14 +159,17 @@ class ExampleProgram:
                     user_id = foldername[-14:-11]
                     with open(foldername + '/' + file) as file:
                         # Check if the plt file contains fewer or exactly 2500 lines
+                        # 2506 since first 6 lines is the header
                         file = file.readlines()
-                        if len(file) <= 2500:
+                        if len(file) <= 2506:
                             for i, line in enumerate(file):
                                 # ignore first 6 lines, rest is added to trackpoints array
                                 if i > 6:
                                     columns = line.strip().split(',')
                                     lat, lon, alt, date_days, date, the_time = columns[0], columns[1], columns[3], columns[4], columns[5], columns[6]
                                     date_time = date + " " + the_time
+                                    # This returns an error if a date does not match the correct format,
+                                    # so no corrupted data is added to the database
                                     date_time = datetime.strptime(date_time, '%Y-%m-%d %H:%M:%S')
                                     trackpoints.append((activities_id, lat, lon, alt, date_days, date_time))
                                     # print("added trackpoint: " + str(activities_id) + " " + str(lat) + " " + str(lon) + " " + str(alt) + " " + str(date_days) + " " + str(date_time))
@@ -272,15 +275,15 @@ def main():
         # Creating the tables
         
        
-        program.drop_table(table_name="TrackPoint")
-        program.drop_table(table_name="Activity")
-        program.drop_table(table_name="User")
+        # program.drop_table(table_name="TrackPoint")
+        # program.drop_table(table_name="Activity")
+        # program.drop_table(table_name="User")
         # program.drop_table(table_name="Person")
 
         # program.create_table(person_table_query, "Person")
-        program.create_table(user_table_query, "User")
-        program.create_table(activity_table_query, "Activity")
-        program.create_table(trackpoint_table_query, "TrackPoint")
+        # program.create_table(user_table_query, "User")
+        # program.create_table(activity_table_query, "Activity")
+        # program.create_table(trackpoint_table_query, "TrackPoint")
 
 
         # Insert data to the Person table
