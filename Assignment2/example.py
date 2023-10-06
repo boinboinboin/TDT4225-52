@@ -411,14 +411,14 @@ class ExampleProgram:
         sorted_users = sorted(users, key=lambda x: x[0])
         print("inserting users into db...")
         tik = time.time()
-        # self.insert_into_user(sorted_users)
+        self.insert_into_user(sorted_users)
         tok = time.time()
         print("finished inserting users after: " + str(tok - tik) + " seconds.")
         
         # Insert the activity data into the database
         print("inserting activities into db...")
         tik = time.time()
-        # self.insert_into_activity(activities)
+        self.insert_into_activity(activities)
         tok = time.time()
         print("finished inserting activities after: " + str(tok - tik) + " seconds.")
         labeled_activities = []
@@ -444,7 +444,7 @@ class ExampleProgram:
         
         print("inserting trackpoints into db...")
         tik = time.time()
-        # self.insert_trackpoints(trackpoints)
+        self.insert_trackpoints(trackpoints)
         tok = time.time()
         print("finished inserting trackpoints after: " + str(tok - tik) + " seconds.")
         
