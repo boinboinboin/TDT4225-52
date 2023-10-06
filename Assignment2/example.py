@@ -249,24 +249,58 @@ class ExampleProgram:
         print(len(result))
         
     def query8(self):
+        # We couldn't solve this.
         query = (
-            "SELECT (SELECT COUNT(*) FROM User) AS users, (SELECT COUNT(*) FROM Activity) AS activities, (SELECT COUNT(*) FROM TrackPoint) AS trackpoints"
+            
         )
         self.cursor.execute(query)
         result = self.cursor.fetchall()
         print(tabulate(result, headers=self.cursor.column_names))
         
     def query9(self):
+        # Does not work, we think the query is correct but it takes too long to execute. We don't know how to optimize it.
         query = (
-            "SELECT (SELECT COUNT(*) FROM User) AS users, (SELECT COUNT(*) FROM Activity) AS activities, (SELECT COUNT(*) FROM TrackPoint) AS trackpoints"
-        )
+            """
+            SELECT u.id AS user_id, 
+            SUM(altitude_gain) AS total_altitude_gain 
+            FROM User AS u 
+            JOIN Activity AS a ON u.id = a.user_id 
+            JOIN 
+            (SELECT t1.activity_id, SUM(CASE WHEN t1.altitude > t2.altitude THEN t1.altitude - t2.altitude ELSE 0 END) 
+            AS altitude_gain 
+            FROM TrackPoint AS t1 
+            LEFT JOIN TrackPoint AS t2 
+            ON t1.activity_id = t2.activity_id AND t1.id = t2.id + 1 
+            WHERE t1.altitude> -777 
+            GROUP BY t1.activity_id) AS altitude_gains ON a.id = altitude_gains.activity_id GROUP BY u.id ORDER BY total_altitude_gain DESC LIMIT 15;
+            """
+                    )
         self.cursor.execute(query)
         result = self.cursor.fetchall()
         print(tabulate(result, headers=self.cursor.column_names))
         
     def query10(self):
+        # We got close with this query, it calculated the distance but it doesn't properly join the tables to find the max value
         query = (
-            "SELECT (SELECT COUNT(*) FROM User) AS users, (SELECT COUNT(*) FROM Activity) AS activities, (SELECT COUNT(*) FROM TrackPoint) AS trackpoints"
+            """
+            WITH DailyDistance AS 
+            (SELECT u.id AS user_id, a.transportation_mode, DATE(a.start_date_time) AS travel_date, 
+            SUM(2 * 6371 * ASIN(SQRT(POW(SIN(RADIANS(tp2.lat - tp1.lat) / 2), 2) + COS(RADIANS(tp1.lat)) * COS(RADIANS(tp2.lat)) * POW(SIN(RADIANS(tp2.lon - tp1.lon) / 2), 2)))) AS total_distance 
+            FROM User AS u 
+            JOIN Activity AS a 
+            ON u.id = a.user_id 
+            JOIN TrackPoint AS tp1 
+            ON a.id = tp1.activity_id 
+            JOIN TrackPoint AS tp2 
+            ON tp1.activity_id = tp2.activity_id AND tp1.id = tp2.id - 1 
+            AND DATE(tp1.date_time) = DATE(tp2.date_time)  
+            WHERE a. transportation_mode != 'NULL' 
+            GROUP BY u.id, a.transportation_mode, travel_date) 
+            SELECT user_id, transportation_mode, MAX(total_distance) AS max_distance_in_one_day 
+            FROM DailyDistance 
+            GROUP BY user_id, transportation_mode 
+            ORDER BY max_distance_in_one_day;
+            """
         )
         self.cursor.execute(query)
         result = self.cursor.fetchall()
@@ -276,9 +310,15 @@ class ExampleProgram:
         query = (
         """
         SELECT u.id AS user_id, COUNT(*) AS invalid_activity_count 
-        FROM User AS u JOIN Activity AS a ON u.id = a.user_id LEFT JOIN (SELECT t1.activity_id, COUNT(*) AS invalid_tp_count 
-        FROM TrackPoint AS t1 LEFT JOIN TrackPoint AS t2 ON t1.activity_id = t2.activity_id AND t1.id = t2.id + 1 
-        WHERE TIMESTAMPDIFF(MINUTE, t2.date_time, t1.date_time) >= 5 GROUP BY t1.activity_id) AS invalid_t ON a.id = invalid_t.activity_id 
+        FROM User AS u 
+        JOIN Activity AS a 
+        ON u.id = a.user_id 
+        LEFT JOIN (SELECT t1.activity_id, COUNT(*) AS invalid_tp_count 
+        FROM TrackPoint AS t1 
+        LEFT JOIN TrackPoint AS t2 
+        ON t1.activity_id = t2.activity_id AND t1.id = t2.id + 1 
+        WHERE TIMESTAMPDIFF(MINUTE, t2.date_time, t1.date_time) >= 5 
+        GROUP BY t1.activity_id) AS invalid_t ON a.id = invalid_t.activity_id 
         WHERE invalid_t.invalid_tp_count IS NOT NULL GROUP BY u.id;
         """
         )
@@ -291,8 +331,7 @@ class ExampleProgram:
         query = (
         """
         SELECT user.id AS user_id,
-               user.has_labels,
-               COALESCE(most_used_mode, 'No Activities') AS most_used_transportation_mode
+               most_used_mode
         FROM User user
         LEFT JOIN (
             SELECT query1.user_id, 
@@ -317,7 +356,7 @@ class ExampleProgram:
             GROUP BY user_id, transportation_mode
         ) AS query2
         ON user.id = query2.user_id AND query2.transp_count = max_counts.max_count
-        WHERE user.has_labels = true;
+        WHERE user.has_labels = true AND max_counts.max_count IS NOT NULL;
         """
         )
         self.cursor.execute(query)
