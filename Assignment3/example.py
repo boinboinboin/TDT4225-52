@@ -5,6 +5,7 @@ import time
 from datetime import datetime
 from pathlib import Path
 from pymongo.errors import BulkWriteError
+from pymongo import UpdateOne
 
 
 
@@ -41,34 +42,39 @@ class ExampleProgram:
     def insert_transportation_into_activity(self, labeled_activities):
     
         collection = self.db["Activity"]
+        # bulk = collection.initialize_unordered_bulk_op()
+        bulk_operation_list = []
 
         for activity in labeled_activities:
-            activities_id, user_id, transportation_mode, start_date_time, end_date_time = activity
-
+            # user_id, transportation_mode, start_date_time, end_date_time = activity
+            user_id = activity.get("user_id")
+            start_date_time = activity.get("start_date_time")
+            end_date_time = activity.get("end_date_time")
             # Fetch activities with the same user_id, start_date_time and end_date_time
-            matching_activity = collection.find_one({
+            # matching_activity = collection.update_one({
+            #     "user_id": user_id,
+            #     "start_date_time": start_date_time,
+            #     "end_date_time": end_date_time
+            # }, {
+            #     "$set": {"transportation_mode": activity.get("transportation_mode")}
+            # })
+            
+            # # 0 count means no match was found
+            # if matching_activity.matched_count == 0:
+            #     self.counter_transportation_ignored += 1
+            # else:
+            #     self.counter_transportation += 1
+            
+            bulk_operation_list.append(UpdateOne({
                 "user_id": user_id,
                 "start_date_time": start_date_time,
                 "end_date_time": end_date_time
-            })
-
-            if matching_activity:
-                # Update the transportation_mode of the matched activity
-                collection.update_one({
-                    "_id": matching_activity["_id"]
-                }, {
-                    "$set": {
-                        "transportation_mode": transportation_mode
-                    }
-                })
-                self.counter_transportation += 1
-            else:
-                self.counter_transportation_ignored += 1
-
-        print("ignored " + str(self.counter_transportation_ignored) + " labeled activities")
-        print("updated " + str(self.counter_transportation) + " labeled activities")
-        print(len(labeled_activities) - self.counter_transportation, "labeled activities with no date match")
-
+            }, {
+                "$set": {"transportation_mode": activity.get("transportation_mode")}
+            }))
+            
+        result = collection.bulk_write(bulk_operation_list)
+        print("updated " + str(result.modified_count) + " labeled activities")
 
     def insert_trackpoints(self, trackpoints):
         collection = self.db["TrackPoint"]  
@@ -152,12 +158,12 @@ class ExampleProgram:
         activities = []
         activities_id = 0
         trackpoints = []
+        print("working dir: " + root_dir)
         for foldername, _, filenames in os.walk(root_dir + "/dataset/dataset/Data"):
             
                 # Check if the foldername ends with "Trajectory", if not, it is a user folder
                 if not foldername.endswith("Trajectory") and not foldername.endswith("Data"):
                     id = foldername[-3:]
-                    
                     # Flag and append the user with has_labels if the id is in the id's list
                     if id in ids:
                         print(id, "has labels")
@@ -170,7 +176,7 @@ class ExampleProgram:
 
                     # Flag and append the user with has_labels if the id is not in the id's list
                     else:
-                        print(id, "has labels")
+                        print(id, "not labels")
 
                         users.append(
                             {
@@ -192,14 +198,23 @@ class ExampleProgram:
                                 for i, line in enumerate(file):
                                     # ignore first 6 lines, rest is added to trackpoints array
                                     if i > 6:
-                                        self.counter_trackpoints += 1
+                                        
                                         columns = line.strip().split(',')
                                         lat, lon, alt, date_days, date, the_time = columns[0], columns[1], columns[3], columns[4], columns[5], columns[6]
                                         date_time = date + " " + the_time
                                         # This returns an error if a date does not match the correct format,
                                         # so no corrupted data is added to the database
                                         date_time = datetime.strptime(date_time, '%Y-%m-%d %H:%M:%S')
-                                        trackpoints.append((activities_id, lat, lon, alt, date_days, date_time))
+                                        trackpoints.append({
+                                            "_id": self.counter_trackpoints,
+                                            "activities_id": activities_id,
+                                            "lat": lat,
+                                            "lon": lon,
+                                            "alt": alt,
+                                            "date_days": date_days,
+                                            "date_time": date_time
+                                        })
+                                        self.counter_trackpoints += 1
                                         # print("added trackpoint: " + str(activities_id) + " " + str(lat) + " " + str(lon) + " " + str(alt) + " " + str(date_days) + " " + str(date_time))
                                     # The seventh line (index 6) is the first valid line in the file, and contains the start date and time of the activity
                                     if i == 6:
@@ -216,7 +231,7 @@ class ExampleProgram:
                                         start_date_time = datetime.strptime(start_date_time_str, '%Y-%m-%d %H:%M:%S')
 
                                         activities.append({
-                                            "activities_id" : activities_id,
+                                            "_id" : activities_id,
                                             "user_id":   user_id,
                                             "transportation_mode": None, 
                                             "start_date_time":  start_date_time,
@@ -227,10 +242,16 @@ class ExampleProgram:
                                 self.counter_ignored += 1
 
         sorted_users = sorted(users, key=lambda x: x['_id'])
+        tik = time.time()
         self.insert_into_user(sorted_users)
-        print("Inserted users into db")
+        tok = time.time()
+        print("finished inserting users after: " + str(tok - tik) + " seconds.")
 
+        print("starting inserting activities into db...")
+        tik = time.time()
         self.insert_into_activity(activities)
+        tok = time.time()
+        print("finished inserting activities after: " + str(tok - tik) + " seconds.")
 
         labeled_activities = []
         for foldername, _, filenames in os.walk(root_dir + "/dataset/dataset/Data"):
@@ -240,6 +261,7 @@ class ExampleProgram:
                     user_id = foldername[-3:]
                     with open(foldername + '/' + file) as file:
                         for i, line in enumerate(file):
+                            # Skip first line
                             if i == 0:
                                 continue
                             line = line.strip().split('\t')
@@ -248,10 +270,9 @@ class ExampleProgram:
                             end_date_time = datetime.strptime(end_date_time_str, '%Y/%m/%d %H:%M:%S')
                             #labeled_activities.append((user_id, transportation_mode, start_date_time, end_date_time))
                             labeled_activities.append({
-                                            "activities_id" : activities_id,
                                             "user_id":   user_id,
                                             "transportation_mode": transportation_mode, 
-                                            "start_date_time":  end_date_time,
+                                            "start_date_time":  start_date_time,
                                             "end_date_time": end_date_time
                                         })
         print("inserting transportation into activities...")
