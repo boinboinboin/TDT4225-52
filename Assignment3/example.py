@@ -138,6 +138,191 @@ class ExampleProgram:
         collections = self.client['test'].list_collection_names()
         print(collections)
 
+
+    def query1(self):
+        print("Query 1:")
+
+        user_count = self.db["User"].count_documents({})
+        activity_count = self.db["Activity"].count_documents({})
+        trackpoint_count =self.db["TrackPoint"].count_documents({})
+
+        print("Number of users:", user_count)
+        print("Number of activities:", activity_count)
+        print("Number of trackpoints:", trackpoint_count)
+
+    def query2(self):
+        print("Query 2:")
+
+        pipeline = [
+            {
+                "$group": {
+                    "_id": "$userId",  
+                    "count": {"$sum": 1}  
+                }
+            },
+            {
+                "$group": {
+                    "_id": None,
+                    "averageActivitiesPerUser": {"$avg": "$count"}  
+                }
+            }
+        ]
+
+        result = list(self.db["Activity"].aggregate(pipeline))
+        average_activities_per_user = result[0]['averageActivitiesPerUser'] if result else 0
+
+        print(f"Average number of activities per user: {average_activities_per_user}")
+
+    def query3(self):
+        print("Query 3:")
+
+        pipeline = [
+            {
+                "$group": {
+                    "_id": "$user_id",  
+                    "count": {"$sum": 1}  
+                }
+            },
+            {
+                "$sort": {
+                    "count": -1
+                }
+            },
+            {
+                "$limit": 20
+            }
+        ]
+
+        result = list(self.db["Activity"].aggregate(pipeline))
+        print("Top 20 users with the highest number of activities:", result)
+
+    def query4(self):
+        print("Query 4:")
+
+        pipeline = [
+            {
+                "$match": {
+                    "transportation_mode": "taxi"
+                }
+            },
+            {
+                "$group": {
+                    "_id": "$user_id"
+                }
+            }
+        ]
+
+        result = list(self.db["Activity"].aggregate(pipeline))
+        print("Users who have taken a taxi:", result)
+
+    def query5(self):
+        print("Query 5:")
+
+        pipeline = [
+            {
+                "$match": {
+                    "transportation_mode": {"$ne": None}
+                }
+            },
+            {
+                "$group": {
+                    "_id": "$transportation_mode",
+                    "count": {"$sum": 1}
+                }
+            }
+        ]
+
+        result = list(self.db["Activity"].aggregate(pipeline))
+        print("Transportation modes and their count:", result)
+
+
+    def query6(self):
+
+        ###### 6a ######
+        print("Query 6a:")
+
+        pipeline = [
+            {
+                "$group": {
+                    "_id": {"$year": "$start_date_time"},
+                    "count": {"$sum": 1},
+                }
+            },
+            {
+                "$sort": {
+                    "count": -1
+                }
+            },
+            {
+                "$limit": 1
+            }
+        ]
+
+        year_most_activities = list(self.db["Activity"].aggregate(pipeline))
+
+        print("Year with the most activities:", year_most_activities)
+
+        ###### 6b ######
+        print("Query 6b:")
+
+        pipeline = [
+            {
+                "$group": {
+                    "_id": {"$year": "$start_date_time"},
+                    "count": {"$sum": {"$divide": [{"$subtract": ["$end_date_time", "$start_date_time"]}, 3600000]}},
+                }
+            },
+            {
+                "$sort": {
+                    "count": -1
+                }
+            },
+            {
+                "$limit": 1
+            }
+        ]
+
+        year_most_recorded_hours = list(self.db["Activity"].aggregate(pipeline))
+
+        print("Year with the most recorded hours:", year_most_recorded_hours)
+
+        if year_most_activities == year_most_recorded_hours:
+            print("The year with the most activities is also the year with the most recorded hours")
+
+        else:
+            print("The year with the most activities is not the year with the most recorded hours")
+
+    
+    def query7(self):
+        print("Query 7:")
+
+        pipeline = [
+            {
+                "$match": {
+                    "user_id": "112",
+                    "transportation_mode": "walk",
+                    "start_date_time": {"$gte": datetime(2008, 1, 1, 0, 0, 0)},
+
+                }
+            },
+            {
+                "$group": {
+                    "_id": "$user_id",
+                    "total_distance": {"$sum": "$distance"}
+                }
+            }
+        ]
+
+        result = list(self.db["Activity"].aggregate(pipeline))
+
+        print("Total distance walked by user 112 in 2008:", result[0]['total_distance'])
+
+    
+    def query8(self):
+        print("Query 8:")
+
+
+        
     def insert_data_into_mongo_db(self):
 
          # Read the ids from labeled_ids.txt and store ids in an array;
@@ -295,15 +480,23 @@ def main():
     program = None
     try:
         program = ExampleProgram()
-        program.drop_colls(["User", "Activity", "TrackPoint"])
 
-        program.create_colls(["User", "Activity", "TrackPoint"])
+        program.query1()
+        program.query2()
+        program.query3()
+        program.query4()
+        program.query5()
+        program.query6()
+        program.query7()
+        # program.drop_colls(["User", "Activity", "TrackPoint"])
+
+        # program.create_colls(["User", "Activity", "TrackPoint"])
 
         #program.drop_colls(["User", "Activity", "TrackPoint"])
         
 
-        program.insert_data_into_mongo_db()
-        program.show_coll()
+        # program.insert_data_into_mongo_db()
+        # program.show_coll()
 
         # program.insert_documents(collection_name="Person")
         # program.fetch_documents(collection_name="Person")
