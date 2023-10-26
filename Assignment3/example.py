@@ -526,7 +526,11 @@ def main():
         program.query5()
         program.query6()
         program.query7()
+        program.query8()
+        # program.query9()
         program.query10()
+        # program.query11()
+
         # program.drop_colls(["User", "Activity", "TrackPoint"])
 
         # program.create_colls(["User", "Activity", "TrackPoint"])
