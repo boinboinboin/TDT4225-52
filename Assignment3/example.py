@@ -374,8 +374,6 @@ class ExampleProgram:
 
         # Execute the aggregation
         results = list(self.db["TrackPoint"].aggregate(pipeline))
-
-        print(results)
         
         tabulate_data = [[document["_id"], document["total_altitude_gain"]] for document in results]
         print(tabulate(tabulate_data, headers=["User ID", "Total Altitude Gain"], tablefmt="grid"))
@@ -689,7 +687,7 @@ def main():
         program.query6()
         program.query7()
         program.query8()
-        program.query9()
+        # program.query9()
         program.query10()
         program.query11()
 
