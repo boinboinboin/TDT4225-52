@@ -321,6 +321,170 @@ class ExampleProgram:
     def query8(self):
         print("Query 8:")
 
+        pipeline = [
+            # Sort by activities_id and date_time
+            {
+                "$sort": {
+                    "activities_id": 1,
+                    "date_time": 1
+                }
+            },
+            # Calculate the altitude change for each activity
+            {
+                "$group": {
+                    "_id": "$activities_id",
+                    "first_altitude": {"$first": "$alt"},
+                    "last_altitude": {"$last": "$alt"}
+                }
+            },
+            {
+                "$project": {
+                    "altitude_change": {
+                        "$subtract": [
+                            {"$toDouble": "$last_altitude"},
+                            {"$toDouble": "$first_altitude"}
+                        ]
+                    }
+                }
+            },
+            # Get only the activity changes > 0
+            {
+                "$match": {
+                    "altitude_change": {"$gt": 0}
+                }
+            },
+            # Sum all the altitude changes for each activity for each user
+            {
+                "$group": {
+                    "_id": "$_id",  
+                    "total_altitude_gain": {"$sum": "$altitude_change"}
+                }
+            },
+            {
+                "$sort": {
+                    "total_altitude_gain": -1
+                }
+            },
+            # Get the top 20 users with most total altitude gained
+            {
+                "$limit": 20
+            }
+        ]
+
+        # Execute the aggregation
+        results = list(self.db["TrackPoint"].aggregate(pipeline))
+
+        print("Top 20 users with the most total gained altitude meters: ", results)
+
+    def query9(self):
+
+        print("Query 9:")
+
+        pipeline_invalid_activities = [
+            {
+                "$sort": {
+                    "activities_id": 1,
+                    "date_time": 1
+                }
+            },
+            {
+                "$group": {
+                    "_id": "$activities_id",
+                    "trackpoints": {
+                        "$push": {
+                            "date_time": "$date_time",
+                            "_id": "$_id"
+                        }
+                    }
+                }
+            },
+            {
+                "$project": {
+                    "deviations": {
+                        "$map": {
+                            "input": {"$range": [0, {"$subtract": [{"$size": "$trackpoints"}, 1]}]},
+                            "as": "idx",
+                            "in": {
+                                "$subtract": [
+                                    {"$arrayElemAt": ["$trackpoints.date_time", {"$add": ["$$idx", 1]}]},
+                                    {"$arrayElemAt": ["$trackpoints.date_time", "$$idx"]}
+                                ]
+                            }
+                        }
+                    }
+                }
+            },
+            {
+                "$match": {
+                    "deviations": {
+                        "$elemMatch": {
+                            "$gte": 5 * 60  # Convert 5 minutes to seconds
+                        }
+                    }
+                }
+            },
+            {
+                "$project": {
+                    "activity_id": "$_id"
+                }
+            }
+        ]
+
+        invalid_activities = list(self.db["TrackPoint"].aggregate(pipeline_invalid_activities))
+        print(invalid_activities)
+
+       
+
+
+    def query11(self):
+        print("Query 11:")
+
+        pipeline = [
+            # Do not count the rows where mode is null
+            {
+                "$match": {
+                    "transportation_mode": {"$ne": None}
+                }
+            },
+            # Group by user_id and transportation_mode
+            {
+                "$group": {
+                    "_id": {
+                        "user_id": "$user_id",
+                        "transportation_mode": "$transportation_mode"
+                    },
+                    "count": {"$sum": 1}
+                }
+            },
+            # Get the most used transportation mode for each user
+            {
+                "$sort": {
+                    "_id.user_id": 1,
+                    "count": -1,  
+                    "_id.transportation_mode": 1  
+                }
+            },
+            {
+                "$group": {
+                    "_id": "$_id.user_id",
+                    "most_used_transportation_mode": {"$first": "$_id.transportation_mode"}
+                }
+            },
+            # Sort by user_id
+            {
+                "$sort": {
+                    "_id": 1
+                }
+            }
+        ]
+
+        results = list(self.db["Activity"].aggregate(pipeline))
+
+        print("Users with the most used transportation mode:", results)
+
+        # Print the results
+        # for result in results:
+        #     print(f"User ID: {result['_id']}, Most Used Transportation Mode: {result['most_used_transportation_mode']}")
 
         
     def insert_data_into_mongo_db(self):
@@ -488,6 +652,10 @@ def main():
         program.query5()
         program.query6()
         program.query7()
+        #program.query8()
+        program.query9()
+        #program.query11()
+
         # program.drop_colls(["User", "Activity", "TrackPoint"])
 
         # program.create_colls(["User", "Activity", "TrackPoint"])
