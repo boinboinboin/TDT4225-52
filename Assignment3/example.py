@@ -6,6 +6,8 @@ from datetime import datetime
 from pathlib import Path
 from pymongo.errors import BulkWriteError
 from pymongo import UpdateOne
+from tabulate import tabulate
+from haversine import haversine
 
 
 
@@ -140,7 +142,7 @@ class ExampleProgram:
 
 
     def query1(self):
-        print("Query 1:")
+        print("Query 1: Number of users, activities and trackpoints")
 
         user_count = self.db["User"].count_documents({})
         activity_count = self.db["Activity"].count_documents({})
@@ -151,30 +153,14 @@ class ExampleProgram:
         print("Number of trackpoints:", trackpoint_count)
 
     def query2(self):
-        print("Query 2:")
-
-        pipeline = [
-            {
-                "$group": {
-                    "_id": "$userId",  
-                    "count": {"$sum": 1}  
-                }
-            },
-            {
-                "$group": {
-                    "_id": None,
-                    "averageActivitiesPerUser": {"$avg": "$count"}  
-                }
-            }
-        ]
-
-        result = list(self.db["Activity"].aggregate(pipeline))
-        average_activities_per_user = result[0]['averageActivitiesPerUser'] if result else 0
-
-        print(f"Average number of activities per user: {average_activities_per_user}")
+        print("\nQuery 2: Average number of activities per user")
+        # Since every activity must have a user id, we can just count the number of users and activities
+        user_count = self.db["User"].count_documents({})
+        activity_count = self.db["Activity"].count_documents({})
+        print("Average number of activities per user:", activity_count / user_count)
 
     def query3(self):
-        print("Query 3:")
+        print("\nQuery 3: 20 users with the most activities")
 
         pipeline = [
             {
@@ -194,10 +180,13 @@ class ExampleProgram:
         ]
 
         result = list(self.db["Activity"].aggregate(pipeline))
-        print("Top 20 users with the highest number of activities:", result)
+        # print("Top 20 users with the highest number of activities:", result)
+        
+        tabulate_data = [[document["_id"], document["count"]] for document in result]
+        print(tabulate(tabulate_data, headers=["User ID", "Count"], tablefmt="grid"))
 
     def query4(self):
-        print("Query 4:")
+        print("\nQuery 4: User ID's who have taken a taxi")
 
         pipeline = [
             {
@@ -213,10 +202,15 @@ class ExampleProgram:
         ]
 
         result = list(self.db["Activity"].aggregate(pipeline))
-        print("Users who have taken a taxi:", result)
+        # print("Users who have taken a taxi:", result)
+        
+        tabulate_data = [(document["_id"]) for document in result]
+        # print(tabulate(tabulate_data, headers=["User ID"], tablefmt="grid"))
+        print(tabulate_data)
+        print("Total: ", str(len(result)), " users")
 
     def query5(self):
-        print("Query 5:")
+        print("\nQuery 5:")
 
         pipeline = [
             {
@@ -233,13 +227,17 @@ class ExampleProgram:
         ]
 
         result = list(self.db["Activity"].aggregate(pipeline))
-        print("Transportation modes and their count:", result)
+        # print("Transportation modes and their count:", result)
+        
+        tabulate_data = [[document["_id"], document["count"]] for document in result]
+        print(tabulate(tabulate_data, headers=["Transportation Mode", "Count"], tablefmt="grid"))
+        print("Total: ", str(len(result)), " transportation modes")
 
 
     def query6(self):
 
         ###### 6a ######
-        print("Query 6a:")
+        print("\nQuery 6a: Year with most activities: ")
 
         pipeline = [
             {
@@ -259,11 +257,10 @@ class ExampleProgram:
         ]
 
         year_most_activities = list(self.db["Activity"].aggregate(pipeline))
-
-        print("Year with the most activities:", year_most_activities)
+        print(year_most_activities)
 
         ###### 6b ######
-        print("Query 6b:")
+        print("\nQuery 6b: Year with most recorded hours:")
 
         pipeline = [
             {
@@ -284,7 +281,7 @@ class ExampleProgram:
 
         year_most_recorded_hours = list(self.db["Activity"].aggregate(pipeline))
 
-        print("Year with the most recorded hours:", year_most_recorded_hours)
+        print(year_most_recorded_hours)
 
         if year_most_activities == year_most_recorded_hours:
             print("The year with the most activities is also the year with the most recorded hours")
@@ -292,34 +289,38 @@ class ExampleProgram:
         else:
             print("The year with the most activities is not the year with the most recorded hours")
 
-    
+
     def query7(self):
-        print("Query 7:")
-
-        pipeline = [
-            {
-                "$match": {
-                    "user_id": "112",
-                    "transportation_mode": "walk",
-                    "start_date_time": {"$gte": datetime(2008, 1, 1, 0, 0, 0)},
-
-                }
-            },
-            {
-                "$group": {
-                    "_id": "$user_id",
-                    "total_distance": {"$sum": "$distance"}
-                }
-            }
-        ]
-
-        result = list(self.db["Activity"].aggregate(pipeline))
-
-        print("Total distance walked by user 112 in 2008:", result[0]['total_distance'])
-
+        print("\nQuery 7: Distance walked by user 112:")
+        distance_travveled = 0
+        
+        activities = self.db["Activity"]
+        trackpoints = self.db["TrackPoint"]
+        
+        # find all activities with user_id 112 and transportation_mode walk
+        result_activities = activities.find({"user_id": "112", "transportation_mode": "walk"}, {"_id": 1})
+        
+        # get all activity ids from the result
+        activity_ids = [document["_id"] for document in result_activities]
+        # print("number of activities: " + str(len(activity_ids)))
+        
+        # find all trackpoints with the activity_ids from above, make it into list of dict's
+        latLonList = list(trackpoints.find({"activities_id": {"$in": activity_ids}}, {"lat": 1, "lon": 1, "_id": 0}))
+        # print("number of trackpoints: " + str(len(latLonList)))
+        
+        # iterate over the list of dict's and calculate the distance between each point based on haversine formula
+        for index, dict in enumerate(latLonList):
+            if index == 0:
+                continue
+            # previous lat and lon values
+            point1 = (float(latLonList[index-1]["lat"]), float(latLonList[index-1]["lon"]))
+            # current values
+            point2 = (float(dict["lat"]), float(dict["lon"]))
+            distance_travveled += haversine(point1, point2, unit="km")
+        print(str(int(distance_travveled)) + "km")
     
     def query8(self):
-        print("Query 8:")
+        print("Query 8: 20 users who have gained the most altitude meters:")
 
         pipeline = [
             # Sort by activities_id and date_time
@@ -373,12 +374,13 @@ class ExampleProgram:
 
         # Execute the aggregation
         results = list(self.db["TrackPoint"].aggregate(pipeline))
-
-        print("Top 20 users with the most total gained altitude meters: ", results)
+        
+        tabulate_data = [[document["_id"], document["total_altitude_gain"]] for document in results]
+        print(tabulate(tabulate_data, headers=["User ID", "Total Altitude Gain"], tablefmt="grid"))
 
     def query9(self):
 
-        print("Query 9:")
+        print("Query 9: Users with invalid activities:")
 
         pipeline_invalid_activities = [
             {
@@ -432,12 +434,49 @@ class ExampleProgram:
 
         invalid_activities = list(self.db["TrackPoint"].aggregate(pipeline_invalid_activities))
         print(invalid_activities)
-
-       
-
-
+        print("Total: ", str(len(invalid_activities)), " activities")
+        
+    def query10(self):
+        print("\nQuery 10: Users with an activity in the Forbidden City of Beijing:")
+        trackpoints = self.db["TrackPoint"]
+        
+        
+        pipeline = [
+            {
+                "$addFields": {
+                    "doubleLat": {"$toDouble": "$lat"},
+                    "doubleLon": {"$toDouble": "$lon"}
+                }
+            },
+            {
+                "$addFields": {
+                    "rounded_lat": {"$round": ["$doubleLat", 3]},
+                    "rounded_lon": {"$round": ["$doubleLon", 3]}
+                }
+            },
+            {
+                "$match": {
+                    "rounded_lat": 39.916,
+                    "rounded_lon": 116.397
+                }
+            },
+            {
+                "$project": {
+                    "activities_id": 1
+                }
+            }
+        ]
+        result = trackpoints.aggregate(pipeline)
+        # Activity ids with lat: 39.916 and lon: 116.397:
+        activity_ids = {document["activities_id"] for document in result}
+        activities = self.db["Activity"]
+        result = activities.find({"_id": {"$in": list(activity_ids)}}, {"user_id": 1})
+        user_ids = {document["user_id"] for document in result}
+        print(user_ids)
+        print("Total: ", str(len(user_ids)), " users")
+        
     def query11(self):
-        print("Query 11:")
+        print("Query 11: Users with a transportation mode, and their most used transportation mode:")
 
         pipeline = [
             # Do not count the rows where mode is null
@@ -481,11 +520,6 @@ class ExampleProgram:
         results = list(self.db["Activity"].aggregate(pipeline))
 
         print("Users with the most used transportation mode:", results)
-
-        # Print the results
-        # for result in results:
-        #     print(f"User ID: {result['_id']}, Most Used Transportation Mode: {result['most_used_transportation_mode']}")
-
         
     def insert_data_into_mongo_db(self):
 
@@ -652,9 +686,10 @@ def main():
         program.query5()
         program.query6()
         program.query7()
-        #program.query8()
-        program.query9()
-        #program.query11()
+        program.query8()
+        # program.query9()
+        program.query10()
+        program.query11()
 
         # program.drop_colls(["User", "Activity", "TrackPoint"])
 
