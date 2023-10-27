@@ -388,8 +388,22 @@ class ExampleProgram:
                 }
             },
             {
+                "$lookup": {
+                    "from": "Activity",
+                    "localField": "activities_id",
+                    "foreignField": "_id",
+                    "as": "activity"
+                }
+            },
+            {
+                "$unwind": "$activity"
+            },
+            {
                 "$group": {
-                    "_id": "$activities_id",
+                    "_id": {
+                        "user_id": "$activity.user_id",
+                        "activities_id": "$activities_id"
+                    },
                     "trackpoints": {
                         "$push": {
                             "date_time": "$date_time",
@@ -418,14 +432,24 @@ class ExampleProgram:
                 "$match": {
                     "deviations": {
                         "$elemMatch": {
-                            "$gte": 5 * 60  # Convert 5 minutes to seconds
+                            "$gte": 5 * 60  
                         }
                     }
                 }
             },
             {
+                "$group": {
+                    "_id": "$_id.user_id",
+                    "invalid_activities_count": {
+                        "$sum": 1
+                    }
+                }
+            },
+            {
                 "$project": {
-                    "activity_id": "$_id"
+                    "user_id": "$_id",
+                    "invalid_activities_count": 1,
+                    "_id": 0
                 }
             }
         ]
@@ -433,9 +457,9 @@ class ExampleProgram:
         invalid_activities = list(self.db["TrackPoint"].aggregate(pipeline_invalid_activities))
         print(invalid_activities)
 
-       
 
 
+    
     def query11(self):
         print("Query 11:")
 
